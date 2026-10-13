@@ -9,15 +9,15 @@
 
 FROM python:3.11-slim
 
-# Install only the packages the API actually needs (no OCR / Playwright
-# at runtime — those run on the workstation that does the ingestion
-# ingestion via `python scripts/refresh_all.py`).
+# Install the API dependencies and the Chromium browser used by the
+# scrape endpoints and the in-process refresh loop.
 WORKDIR /app
 
-# System libs for psycopg2 / Pillow are already in the slim image.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY huayapp-api/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt \
+    && playwright install --with-deps chromium
 
 # Bring in the ingestion package and the API package. The directory
 # name on disk is ``huayapp-api`` (with a hyphen, Python-import friendly
