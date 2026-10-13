@@ -1,0 +1,49 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firebase-hosting.json",
+      ".firebaserc",
+      "**/.*",
+      "**/node_modules/**",
+      "server.ts",
+      "package.json",
+      "lottery.db",
+      "lottery.db-journal",
+      "README.md",
+      "huayapp-api/**",
+      "huayapp_scraper/**",
+      "tests/**",
+      "docs/**",
+      "*.py",
+      "*.ps1",
+      "*.ts",
+      "*.db",
+      "*.db-*",
+      "requirements*.txt"
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(html)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(css|js)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
+      }
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false
+  }
+}

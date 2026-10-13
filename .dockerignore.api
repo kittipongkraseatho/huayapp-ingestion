@@ -1,0 +1,56 @@
+# When Railway builds the API image it should ignore the frontend
+# bundle, OCR workspace, tests, and the developer tooling that isn't
+# needed to serve the API. Listed below are paths that the
+# Dockerfile.api copy instructions never reference, so copying them
+# would only waste build time and image size.
+
+**/.git
+**/.venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyd
+**/*.so
+
+# Frontend bundle is irrelevant to the API.
+index.html
+banner-content.js
+firebase.json
+firebase-hosting.json
+.firebaserc
+firestore.rules
+storage.rules
+
+# OCR workspace + dev artifacts.
+.debug*
+debug-*.json
+debug-*.png
+batch-*.txt
+refresh-output.txt
+scrape-all-output.txt
+huayapp.db
+lottery.db
+live-*.db
+
+# OCR / scraper integration is run from a workstation, not in the API.
+requirements-ocr.txt
+huayapp_scraper/sources/__pycache__
+huayapp_scraper/ocr/__pycache__
+huayapp_scraper/scraper/__pycache__
+
+# Tests, docs, deployment helpers, plan/spec markdown.
+tests/
+docs/
+scripts/
+cleanup.ps1
+deploy.ps1
+fix-*.mjs
+find-crown*.mjs
+write-banner*.mjs
+_*.mjs
+_*.ps1
+_*.cjs
+_*.txt
+_*.log
+_*.html
+_banner_dump.txt

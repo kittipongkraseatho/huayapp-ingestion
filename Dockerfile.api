@@ -1,0 +1,41 @@
+# Build context: this directory (C:\Users\kittiphong.k\Documents\Default Project\big).
+# Railway's "Dockerfile" build path is configured in railway.toml.
+#
+# The image runs:
+#   - FastAPI service from huayapp-api/app.py
+#   - Periodic refresh loop started by the lifespan context
+#   - PostgreSQL when DATABASE_URL is set (psycopg2-binary is installed)
+#   - Falls back to SQLite in WORKDIR/lottery.db otherwise
+
+FROM python:3.11-slim
+
+# Install only the packages the API actually needs (no OCR / Playwright
+# at runtime — those run on the workstation that does the ingestion
+# ingestion via `python scripts/refresh_all.py`).
+WORKDIR /app
+
+# System libs for psycopg2 / Pillow are already in the slim image.
+
+COPY huayapp-api/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Bring in the ingestion package and the API package. The directory
+# name on disk is ``huayapp-api`` (with a hyphen, Python-import friendly
+# is ``huayapp_api`` with an underscore); the rename happens here.
+COPY huayapp_scraper /app/huayapp_scraper
+COPY huayapp-api /app/huayapp_api
+
+# Railway sets $PORT automatically; expose it for documentation.
+ENV PORT=8080 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Health check — FastAPI exposes /health without auth.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:'+str(__import__('os').environ.get('PORT','8080'))+'/health',timeout=3).status==200 else 1)"
+
+# Run uvicorn. --workers 1 is intentional: the lifespan loop owns the
+# in-process refresh thread and we don't want multiple workers fighting
+# over the same SQLite/Postgres rows. Scale by adding more Railway
+# services if you need it.
+CMD ["sh", "-c", "uvicorn huayapp_api.app:app --host 0.0.0.0 --port ${PORT}"]

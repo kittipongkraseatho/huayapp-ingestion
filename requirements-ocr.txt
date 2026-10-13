@@ -1,0 +1,5 @@
+# Optional fallback/experimentation dependency. The primary reader uses
+# browser-rendered glyph templates and does not require RapidOCR. The package's
+# published Python metadata may exclude 3.13 even though it can work there;
+# prefer Python 3.11/3.12 for a supported installation.
+rapidocr-onnxruntime==1.2.3

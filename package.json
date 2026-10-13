@@ -1,0 +1,18 @@
+{
+  "name": "yiki-lottery-spa",
+  "version": "1.0.0",
+  "description": "SPA + Bun backend for Thai lottery (ยี่กี่) formula calculator",
+  "type": "module",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "bun run server.ts",
+    "start": "bun run server.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "firebase": "^10.12.5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

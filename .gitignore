@@ -1,0 +1,117 @@
+# --- Python / venv ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.venv-*/
+.pytest_cache/
+.coverage
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node ---
+node_modules/
+npm-debug.log
+yarn-error.log
+bun.lockb
+
+# --- Local DB / debug artifacts ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+live-*.db
+debug-*.json
+debug-*.png
+debug-c/
+batch-*.txt
+refresh-output.txt
+scrape-all-output.txt
+quick-output.txt
+morph-*.png
+proc-*.png
+immediate-*.png
+fail-*-*.png
+cell*-*.png
+
+# --- One-off dev scripts (prefixed with _ or named analyze/debug) ---
+_*.mjs
+_*.cjs
+_*.js
+_*.html
+_*.txt
+_*.log
+_*.ps1
+analyze.py
+analyze2.py
+find-crown*.mjs
+fix-*.mjs
+write-banner*.mjs
+banner-content.js
+dump-corrupted-v2.ps1
+cleanup.ps1
+deploy.ps1
+fix-bytes-*.mjs
+# Debug/diagnostic HTML / JS produced during manual investigation
+app-20261007.html
+_deployed_check.html
+_check_login.mjs
+_debug_firestore.cjs
+_inspect_banner_bytes.mjs
+_inspect_banners.mjs
+_dump_banner1.mjs
+_find_thai.mjs
+_verify.mjs
+_verify2.mjs
+_verify3.mjs
+_verify_plan.mjs
+_verify_vip.mjs
+_test_bun_write.mjs
+_test_login.mjs
+_test_thai.txt
+_banner_dump.txt
+_capture.log
+_capture.mjs
+_deploy*.log
+_fix_pw*.log
+_qt.log
+_encoding_check.txt
+
+# --- Strategy / data exports (kept locally, not source) ---
+strategy_statement*.csv
+live-huayapp-template.json
+
+# --- Agent / dev metadata (not part of the project) ---
+.superpowers/
+.DS_Store
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Firebase ---
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# --- Misc ---
+*.log
+*.bak
+*~
+.cache/
+
+# --- Secrets — keep .env.example, drop local .env files ---
+.env
+.env.local
+.env.*.local
+
+# --- Local CI / build artifacts ---
+dist/
+build/
+*.tsbuildinfo
