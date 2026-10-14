@@ -5,6 +5,7 @@ beautifulsoup4>=4.12,<5
 lxml>=5.0,<6
 playwright>=1.45,<2
 Pillow>=10.0,<12
+rapidocr-onnxruntime==1.2.3
 # Optional: switch from SQLite to PostgreSQL when DATABASE_URL is set.
 # pip install psycopg2-binary
 psycopg2-binary>=2.9,<3
