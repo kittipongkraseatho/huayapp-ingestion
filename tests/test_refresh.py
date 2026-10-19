@@ -1,8 +1,9 @@
 from datetime import date, datetime, timezone
+import re
 
 from huayapp_scraper.config import Config
-from huayapp_scraper.models import LotteryResult, PrizeResult
-from huayapp_scraper.refresh import refresh_all
+from huayapp_scraper.models import LotteryCard, LotteryResult, PrizeResult, PrizeSlot
+from huayapp_scraper.refresh import refresh_all, refresh_all_cards
 from huayapp_scraper.sources.base import SourceFetch, SourceSpec
 from huayapp_scraper.storage import SQLiteStore
 
@@ -101,3 +102,143 @@ def test_huayapp_registry_adapter_calls_dynamic_scrape(monkeypatch):
 
     assert fetched.status == "published"
     assert fetched.results == [expected]
+
+
+class FakeLocator:
+    def __init__(self, count=1):
+        self._count = count
+
+    @property
+    def first(self):
+        return self
+
+    def filter(self, **_kwargs):
+        return self
+
+    def locator(self, _selector):
+        return self
+
+    def count(self):
+        return self._count
+
+    def nth(self, _index):
+        return self
+
+
+class FakePage:
+    def __init__(self, cards):
+        self.cards = {card.lottery_id: card for card in cards}
+        self.goto_calls = 0
+        self.wait_for_selector_calls = 0
+        self.wait_for_timeout_calls = 0
+
+    def goto(self, *_args, **_kwargs):
+        self.goto_calls += 1
+
+    def wait_for_selector(self, *_args, **_kwargs):
+        self.wait_for_selector_calls += 1
+
+    def wait_for_timeout(self, _milliseconds):
+        self.wait_for_timeout_calls += 1
+
+    def content(self):
+        return "<html>live page</html>"
+
+    def locator(self, selector):
+        match = re.search(r"#lotto-card-([^ ]+)", selector)
+        if match:
+            return FakeLocator(len(self.cards[match.group(1)].prize_slots))
+        return FakeLocator()
+
+
+class FakeStore:
+    def __init__(self):
+        self.results = []
+        self.close_calls = 0
+
+    def upsert(self, result):
+        self.results.append(result)
+        return True
+
+    def close(self):
+        self.close_calls += 1
+
+
+def make_refresh_card(lottery_id):
+    return LotteryCard(
+        lottery_id=lottery_id,
+        lottery_name=f"Lottery {lottery_id}",
+        category="regional",
+        result_date=date(2026, 10, 1),
+        result_date_display="1/10/2026",
+        result_time="19:30",
+        status="published",
+        prize_slots=(PrizeSlot("เลขบน", 1, "published"),),
+        source_url="https://huayapp.test/",
+    )
+
+
+def patch_refresh_dependencies(monkeypatch, cards):
+    from huayapp_scraper import refresh as refresh_module
+
+    class FakeHttpClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        def get(self, _url):
+            return "<html>index page</html>"
+
+    class FakeDecoder:
+        def __init__(self, **_kwargs):
+            pass
+
+    class FakeOCR:
+        def __init__(self, **_kwargs):
+            pass
+
+    monkeypatch.setattr(refresh_module, "HttpClient", FakeHttpClient)
+    monkeypatch.setattr(refresh_module, "parse_cards", lambda _html, _url: cards)
+    monkeypatch.setattr(refresh_module, "CanvasGlyphDecoder", FakeDecoder)
+    monkeypatch.setattr(refresh_module, "CanvasOCR", FakeOCR)
+    monkeypatch.setattr(refresh_module, "_decode_value", lambda *_args: "0123")
+
+
+def test_refresh_all_cards_reuses_one_loaded_page(monkeypatch):
+    cards = [make_refresh_card("100"), make_refresh_card("101")]
+    patch_refresh_dependencies(monkeypatch, cards)
+    page = FakePage(cards)
+    store = FakeStore()
+
+    successes, failures = refresh_all_cards(Config(), store=store, page=page)
+
+    assert len(successes) == 2
+    assert failures == []
+    assert len(store.results) == 2
+    assert page.goto_calls == 1
+    assert page.wait_for_selector_calls == 1
+    assert page.wait_for_timeout_calls == 1
+
+
+def test_refresh_all_cards_does_not_close_caller_owned_store(monkeypatch):
+    cards = [make_refresh_card("100")]
+    patch_refresh_dependencies(monkeypatch, cards)
+    page = FakePage(cards)
+    store = FakeStore()
+
+    refresh_all_cards(Config(), store=store, page=page)
+
+    assert store.close_calls == 0
+
+
+def test_refresh_all_cards_closes_store_it_opens(monkeypatch):
+    cards = [make_refresh_card("100")]
+    patch_refresh_dependencies(monkeypatch, cards)
+    page = FakePage(cards)
+    store = FakeStore()
+
+    from huayapp_scraper import refresh as refresh_module
+
+    monkeypatch.setattr(refresh_module, "open_store", lambda _config: store)
+    refresh_all_cards(Config(), page=page)
+
+    assert store.close_calls == 1
