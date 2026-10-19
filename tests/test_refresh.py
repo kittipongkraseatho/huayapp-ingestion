@@ -242,3 +242,86 @@ def test_refresh_all_cards_closes_store_it_opens(monkeypatch):
     refresh_all_cards(Config(), page=page)
 
     assert store.close_calls == 1
+
+
+def test_refresh_all_cards_closes_partial_browser_resources(monkeypatch):
+    cards = [make_refresh_card("100")]
+    patch_refresh_dependencies(monkeypatch, cards)
+    store = FakeStore()
+
+    class FakeContext:
+        def __init__(self):
+            self.close_calls = 0
+
+        def new_page(self):
+            raise RuntimeError("page creation failed")
+
+        def close(self):
+            self.close_calls += 1
+
+    class FakeBrowser:
+        def __init__(self, context):
+            self.context = context
+            self.close_calls = 0
+
+        def new_context(self, **_kwargs):
+            return self.context
+
+        def close(self):
+            self.close_calls += 1
+
+    class FakePlaywright:
+        def __init__(self, browser):
+            self.chromium = self
+            self.browser = browser
+            self.stop_calls = 0
+
+        def start(self):
+            return self
+
+        def launch(self, **_kwargs):
+            return self.browser
+
+        def stop(self):
+            self.stop_calls += 1
+
+    context = FakeContext()
+    browser = FakeBrowser(context)
+    playwright = FakePlaywright(browser)
+
+    import playwright.sync_api as sync_api
+
+    monkeypatch.setattr(sync_api, "sync_playwright", lambda: playwright)
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="page creation failed"):
+        refresh_all_cards(Config(), store=store)
+
+    assert context.close_calls == 1
+    assert browser.close_calls == 1
+    assert playwright.stop_calls == 1
+
+
+def test_refresh_all_cards_keeps_falsey_caller_store(monkeypatch):
+    cards = [make_refresh_card("100")]
+    patch_refresh_dependencies(monkeypatch, cards)
+    page = FakePage(cards)
+
+    class FalseyStore(FakeStore):
+        def __bool__(self):
+            return False
+
+    store = FalseyStore()
+    from huayapp_scraper import refresh as refresh_module
+
+    monkeypatch.setattr(
+        refresh_module,
+        "open_store",
+        lambda _config: (_ for _ in ()).throw(AssertionError("opened a replacement store")),
+    )
+
+    refresh_all_cards(Config(), store=store, page=page)
+
+    assert len(store.results) == 1
+    assert store.close_calls == 0

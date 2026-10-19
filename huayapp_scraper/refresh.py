@@ -179,7 +179,8 @@ def refresh_all_cards(
         after every card. Useful for the CLI / API to stream partial progress.
         """
     provided_store = store is not None
-    store = store or open_store(config)
+    if store is None:
+        store = open_store(config)
 
     try:
         # Discover cards from the public HTML index.
@@ -209,13 +210,17 @@ def refresh_all_cards(
 
             ctx_page = page
             close_at_every: list[Any] = []
-            if ctx_page is None:
-                pw = sync_playwright().start()
-                browser_engine = pw.chromium.launch(headless=config.browser_headless)
-                context = browser_engine.new_context(device_scale_factor=3)
-                ctx_page = context.new_page()
-                close_at_every = [pw, browser_engine, context, ctx_page]
             try:
+                if ctx_page is None:
+                    pw = sync_playwright().start()
+                    close_at_every.append(pw)
+                    browser_engine = pw.chromium.launch(headless=config.browser_headless)
+                    close_at_every.append(browser_engine)
+                    context = browser_engine.new_context(device_scale_factor=3)
+                    close_at_every.append(context)
+                    ctx_page = context.new_page()
+                    close_at_every.append(ctx_page)
+
                 if not published:
                     return
 
@@ -285,7 +290,13 @@ def refresh_all_cards(
             finally:
                 for handle in reversed(close_at_every):
                     try:
-                        handle.close()
+                        close = getattr(handle, "close", None)
+                        if callable(close):
+                            close()
+                            continue
+                        stop = getattr(handle, "stop", None)
+                        if callable(stop):
+                            stop()
                     except Exception:  # noqa: BLE001
                         pass
 
