@@ -23,7 +23,7 @@ from huayapp_scraper.storage import open_store
 
 async def _refresh_loop():
     # ``Config.refresh_interval_seconds`` is the single source of truth (env
-    # var: REFRESH_INTERVAL_SECONDS, default 900s). The floor of 60s keeps
+    # var: REFRESH_INTERVAL_SECONDS, default 1800s). The floor of 60s keeps
     # a misconfigured env var from spawning overlapping refreshes.
     while True:
         cfg = config()
