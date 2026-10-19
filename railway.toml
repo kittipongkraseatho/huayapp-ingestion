@@ -15,7 +15,7 @@
 #   SCRAPE_API_KEY         any long random value (32+ bytes)
 #   ALLOWED_DOMAINS        https://lotto-89ad0.web.app
 #   CORS_ORIGINS           https://lotto-89ad0.web.app
-#   REFRESH_INTERVAL_SECONDS 900
+#   REFRESH_INTERVAL_SECONDS 1800
 #
 # Railway's "Variables" tab on the service lets you paste the values
 # above; DATABASE_URL comes from the Postgres plugin if you add one.
@@ -39,5 +39,5 @@ restartPolicyMaxRetries = 10
 # lifespan already handles that. Just expose the interval here so it is
 # visible from the service page.
 [env]
-REFRESH_INTERVAL_SECONDS = { default = "900" }
+REFRESH_INTERVAL_SECONDS = { default = "1800" }
 PYTHONUNBUFFERED = { default = "1" }

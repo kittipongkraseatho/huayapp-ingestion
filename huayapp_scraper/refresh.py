@@ -178,121 +178,136 @@ def refresh_all_cards(
         Optional callable invoked as ``progress_callback(idx, total, card_id, success, error)``
         after every card. Useful for the CLI / API to stream partial progress.
         """
-    store = store or open_store(config)
-    own_store = store is None or not getattr(store, "_is_external", False)
-    if not store:
+    provided_store = store is not None
+    if store is None:
         store = open_store(config)
-        own_store = True
 
-    # Discover cards from the public HTML index.
-    html = HttpClient(
-        timeout=config.request_timeout,
-        max_retries=config.max_retries,
-        backoff_base=max(0.1, config.request_delay_seconds),
-    ).get(config.source_url)
-    cards = parse_cards(html, config.source_url)
-    published = [card for card in cards if card.status == "published"]
-
-    ocr = CanvasGlyphDecoder(min_score=config.ocr_confidence_threshold)
-    fallback_ocr: CanvasOCR | None = None
     try:
-        fallback_ocr = CanvasOCR(
-            min_confidence=max(0.0, config.ocr_confidence_threshold - 0.20)
-        )
-    except Exception:  # noqa: BLE001 — fallback is best-effort
-        fallback_ocr = None
+        # Discover cards from the public HTML index.
+        html = HttpClient(
+            timeout=config.request_timeout,
+            max_retries=config.max_retries,
+            backoff_base=max(0.1, config.request_delay_seconds),
+        ).get(config.source_url)
+        cards = parse_cards(html, config.source_url)
+        published = [card for card in cards if card.status == "published"]
 
-    successes: list[Any] = []
-    failures: list[tuple[str, str]] = []
-    now = datetime.now(timezone.utc)
-
-    def _iter(page):
-        from playwright.sync_api import sync_playwright
-
-        ctx_page = page
-        close_at_every: list[Any] = []
-        if ctx_page is None:
-            pw = sync_playwright().start()
-            browser_engine = pw.chromium.launch(headless=config.browser_headless)
-            context = browser_engine.new_context(device_scale_factor=3)
-            ctx_page = context.new_page()
-            close_at_every = [pw, browser_engine, context, ctx_page]
+        ocr = CanvasGlyphDecoder(min_score=config.ocr_confidence_threshold)
+        fallback_ocr: CanvasOCR | None = None
         try:
-            for idx, card in enumerate(published):
-                lottery_id = card.lottery_id
-                try:
-                    ctx_page.goto(
-                        config.source_url,
-                        wait_until="domcontentloaded",
-                        timeout=int(config.request_timeout * 1000),
-                    )
-                    ctx_page.wait_for_selector(
-                        f"#lotto-card-{lottery_id}",
-                        state="visible",
-                        timeout=int(config.request_timeout * 1000),
-                    )
-                    ctx_page.wait_for_timeout(2000)
-                    page_now = parse_cards(ctx_page.content(), config.source_url)
-                    card_now = next((c for c in page_now if c.lottery_id == lottery_id), None)
-                    if card_now is None or card_now.status != "published":
-                        raise ScrapeError(f"{lottery_id} not found or unpublished")
+            fallback_ocr = CanvasOCR(
+                min_confidence=max(0.0, config.ocr_confidence_threshold - 0.20)
+            )
+        except Exception:  # noqa: BLE001 — fallback is best-effort
+            fallback_ocr = None
 
-                    values: dict[str, list[str]] = {}
-                    for slot in card_now.prize_slots:
-                        cell = ctx_page.locator(
-                            f"#lotto-card-{lottery_id} .lotto-cell"
-                        ).filter(has_text=slot.prize_name).first
-                        canvases = cell.locator("canvas.frontend-canvas-obf")
-                        actual = canvases.count()
-                        if actual != slot.number_count:
-                            raise ScrapeError(
-                                f"canvas count changed for {lottery_id}/{slot.prize_name}"
-                            )
-                        expected = _expected_digits(slot.prize_name)
-                        numbers: list[str] = []
-                        for i in range(actual):
-                            canvas = canvases.nth(i)
-                            number = _decode_value(
-                                canvas, cell, ocr, fallback_ocr, expected
-                            )
-                            if number is None:
+        successes: list[Any] = []
+        failures: list[tuple[str, str]] = []
+        now = datetime.now(timezone.utc)
+
+        def _iter(page):
+            from playwright.sync_api import sync_playwright
+
+            ctx_page = page
+            close_at_every: list[Any] = []
+            try:
+                if ctx_page is None:
+                    pw = sync_playwright().start()
+                    close_at_every.append(pw)
+                    browser_engine = pw.chromium.launch(headless=config.browser_headless)
+                    close_at_every.append(browser_engine)
+                    context = browser_engine.new_context(device_scale_factor=3)
+                    close_at_every.append(context)
+                    ctx_page = context.new_page()
+                    close_at_every.append(ctx_page)
+
+                if not published:
+                    return
+
+                ctx_page.goto(
+                    config.source_url,
+                    wait_until="domcontentloaded",
+                    timeout=int(config.request_timeout * 1000),
+                )
+                ctx_page.wait_for_selector(
+                    f"#lotto-card-{published[0].lottery_id}",
+                    state="visible",
+                    timeout=int(config.request_timeout * 1000),
+                )
+                ctx_page.wait_for_timeout(2000)
+                page_now = parse_cards(ctx_page.content(), config.source_url)
+                cards_now = {card.lottery_id: card for card in page_now}
+
+                for idx, card in enumerate(published):
+                    lottery_id = card.lottery_id
+                    try:
+                        card_now = cards_now.get(lottery_id)
+                        if card_now is None or card_now.status != "published":
+                            raise ScrapeError(f"{lottery_id} not found or unpublished")
+
+                        values: dict[str, list[str]] = {}
+                        for slot in card_now.prize_slots:
+                            cell = ctx_page.locator(
+                                f"#lotto-card-{lottery_id} .lotto-cell"
+                            ).filter(has_text=slot.prize_name).first
+                            canvases = cell.locator("canvas.frontend-canvas-obf")
+                            actual = canvases.count()
+                            if actual != slot.number_count:
                                 raise ScrapeError(
-                                    f"OCR rejected {lottery_id}/{slot.prize_name}[{i}]"
+                                    f"canvas count changed for {lottery_id}/{slot.prize_name}"
                                 )
-                            numbers.append(number)
-                        values[slot.prize_name] = numbers
-                    result = build_result_from_card(card_now, values, scraped_at=now)
-                    validation = validate_record(result)
-                    if not validation.valid:
-                        raise ScrapeError(
-                            "validation failed: " + "; ".join(validation.errors)
-                        )
-                    store.upsert(result)
-                    successes.append(result)
-                    if progress_callback is not None:
-                        progress_callback(idx + 1, len(published), lottery_id, True, None)
-                except ScrapeError as exc:
-                    failures.append((lottery_id, str(exc)))
-                    if progress_callback is not None:
-                        progress_callback(idx + 1, len(published), lottery_id, False, str(exc))
-                except Exception as exc:  # noqa: BLE001 — keep the loop alive
-                    failures.append((lottery_id, f"unexpected: {exc}"))
-                    if progress_callback is not None:
-                        progress_callback(idx + 1, len(published), lottery_id, False, f"unexpected: {exc}")
-        finally:
-            for handle in reversed(close_at_every):
-                try:
-                    handle.close()
-                except Exception:  # noqa: BLE001
-                    pass
+                            expected = _expected_digits(slot.prize_name)
+                            numbers: list[str] = []
+                            for i in range(actual):
+                                canvas = canvases.nth(i)
+                                number = _decode_value(
+                                    canvas, cell, ocr, fallback_ocr, expected
+                                )
+                                if number is None:
+                                    raise ScrapeError(
+                                        f"OCR rejected {lottery_id}/{slot.prize_name}[{i}]"
+                                    )
+                                numbers.append(number)
+                            values[slot.prize_name] = numbers
+                        result = build_result_from_card(card_now, values, scraped_at=now)
+                        validation = validate_record(result)
+                        if not validation.valid:
+                            raise ScrapeError(
+                                "validation failed: " + "; ".join(validation.errors)
+                            )
+                        store.upsert(result)
+                        successes.append(result)
+                        if progress_callback is not None:
+                            progress_callback(idx + 1, len(published), lottery_id, True, None)
+                    except ScrapeError as exc:
+                        failures.append((lottery_id, str(exc)))
+                        if progress_callback is not None:
+                            progress_callback(idx + 1, len(published), lottery_id, False, str(exc))
+                    except Exception as exc:  # noqa: BLE001 — keep the loop alive
+                        failures.append((lottery_id, f"unexpected: {exc}"))
+                        if progress_callback is not None:
+                            progress_callback(idx + 1, len(published), lottery_id, False, f"unexpected: {exc}")
+            finally:
+                for handle in reversed(close_at_every):
+                    try:
+                        close = getattr(handle, "close", None)
+                        if callable(close):
+                            close()
+                            continue
+                        stop = getattr(handle, "stop", None)
+                        if callable(stop):
+                            stop()
+                    except Exception:  # noqa: BLE001
+                        pass
 
-    _iter(page)
-    if own_store:
-        try:
-            store.close()
-        except Exception:  # noqa: BLE001
-            pass
-    return successes, failures
+        _iter(page)
+        return successes, failures
+    finally:
+        if not provided_store:
+            try:
+                store.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 __all__ = ["refresh_all_cards"]
