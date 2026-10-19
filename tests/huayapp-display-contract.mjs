@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
+assert.match(html, /fetchIntervalSec:\s*300/, 'remote polling defaults to five minutes');
 assert.match(html, /id="huayapp-round-filter"/, 'Huayapp round filter is present');
 assert.match(html, /huayapp-results\?limit=500/, 'Huayapp fetch requests all available results');
 assert.match(html, /selectedHuayappRound/, 'Huayapp selection state is present');
