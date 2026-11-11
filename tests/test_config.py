@@ -29,3 +29,12 @@ def test_from_env_database_url_default_is_none(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     cfg = Config.from_env()
     assert cfg.database_url is None
+
+
+def test_default_refresh_interval_is_thirty_minutes():
+    assert Config().refresh_interval_seconds == 1800
+
+
+def test_from_env_overrides_refresh_interval(monkeypatch):
+    monkeypatch.setenv("REFRESH_INTERVAL_SECONDS", "2700")
+    assert Config.from_env().refresh_interval_seconds == 2700

@@ -36,9 +36,8 @@ class Config:
     browser_headless: bool = True
     ocr_confidence_threshold: float = 0.70
     # Periodic ingestion needs >= 60s and ideally larger than the time it
-    # takes to scrape every published card (~15 min for the 142-card
-    # Huayapp index). 900s is the production default.
-    refresh_interval_seconds: int = 900
+    # takes to scrape every published card. 1800s is the production default.
+    refresh_interval_seconds: int = 1800
     enabled_sources: tuple[str, ...] = ()
     source_urls: dict[str, str] = field(default_factory=dict)
 
